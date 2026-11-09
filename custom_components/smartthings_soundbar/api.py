@@ -1,138 +1,197 @@
+"""Minimal async client for the SmartThings REST API, scoped to soundbars."""
+
+from __future__ import annotations
+
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, field
 import json
+import logging
+from typing import Any
 
-import requests
-from homeassistant.const import (STATE_OFF, STATE_ON, STATE_PAUSED, STATE_PLAYING, STATE_UNAVAILABLE)
+import aiohttp
 
-API_BASEURL = "https://api.smartthings.com/v1"
-API_DEVICES = API_BASEURL + "/devices/"
-COMMAND_POWER_ON = "{'commands': [{'component': 'main','capability': 'switch','command': 'on'}]}"
-COMMAND_POWER_OFF = "{'commands': [{'component': 'main','capability': 'switch','command': 'off'}]}"
-COMMAND_REFRESH = "{'commands':[{'component': 'main','capability': 'refresh','command': 'refresh'}]}"
-COMMAND_PAUSE = "{'commands':[{'component': 'main','capability': 'mediaPlayback','command': 'pause'}]}"
-COMMAND_MUTE = "{'commands':[{'component': 'main','capability': 'audioMute','command': 'mute'}]}"
-COMMAND_UNMUTE = "{'commands':[{'component': 'main','capability': 'audioMute','command': 'unmute'}]}"
-COMMAND_PLAY = "{'commands':[{'component': 'main','capability': 'mediaPlayback','command': 'play'}]}"
-COMMAND_STOP = "{'commands':[{'component': 'main','capability': 'mediaPlayback','command': 'stop'}]}"
-COMMAND_REWIND = "{'commands':[{'component': 'main','capability': 'mediaPlayback','command': 'rewind'}]}"
-COMMAND_FAST_FORWARD = "{'commands':[{'component': 'main','capability': 'mediaPlayback','command': 'fastForward'}]}"
+_LOGGER = logging.getLogger(__name__)
 
-CONTROLLABLE_SOURCES = ["bluetooth", "wifi"]
+API_BASE_URL = "https://api.smartthings.com/v1"
+REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=15)
+
+type TokenProvider = Callable[[], Awaitable[str]]
 
 
-class SoundbarApi:
+class SmartThingsError(Exception):
+    """Base error for SmartThings API failures."""
 
-    @staticmethod
-    def device_update(entity):
-        API_KEY = entity._api_key
-        REQUEST_HEADERS = {"Authorization": "Bearer " + API_KEY}
-        DEVICE_ID = entity._device_id
-        API_DEVICE = API_DEVICES + DEVICE_ID
-        API_DEVICE_STATUS = API_DEVICE + "/states"
-        API_COMMAND = API_DEVICE + "/commands"
-        cmdurl = requests.post(API_COMMAND, data=COMMAND_REFRESH, headers=REQUEST_HEADERS)
-        resp = requests.get(API_DEVICE_STATUS, headers=REQUEST_HEADERS)
-        data = resp.json()
 
-        switch_state = SoundbarApi.extractor(data, "main.switch.value")
-        if switch_state is None:
-            entity._state = STATE_UNAVAILABLE
-            return
-        playback_state = SoundbarApi.extractor(data, "main.playbackStatus.value")
-        device_source = SoundbarApi.extractor(data, "main.inputSource.value")
-        device_all_sources = json.loads(SoundbarApi.extractor(data, "main.supportedInputSources.value"))
-        device_muted = SoundbarApi.extractor(data, "main.mute.value") != "unmuted"
-        device_volume = SoundbarApi.extractor(data, "main.volume.value")
-        device_volume = min(int(device_volume) / entity._max_volume, 1)
+class SmartThingsAuthError(SmartThingsError):
+    """The token is invalid, expired or lacks the required scopes."""
 
-        if switch_state == "on":
-            if device_source.lower() in CONTROLLABLE_SOURCES:
-                if playback_state == "playing":
-                    entity._state = STATE_PLAYING
-                elif playback_state == "paused":
-                    entity._state = STATE_PAUSED
-                else:
-                    entity._state = STATE_ON
-            else:
-                entity._state = STATE_ON
-        else:
-            entity._state = STATE_OFF
-        entity._volume = device_volume
-        entity._source_list = device_all_sources if type(device_all_sources) is list else device_all_sources["value"]
-        entity._muted = device_muted
-        entity._source = device_source
-        if entity._state in [STATE_PLAYING, STATE_PAUSED] and 'trackDescription' in data['main']:
-            entity._media_title = SoundbarApi.extractor(data, "main.trackDescription.value")
-        else:
-            entity._media_title = None
 
-    @staticmethod
-    def send_command(entity, argument, cmdtype):
-        API_KEY = entity._api_key
-        REQUEST_HEADERS = {"Authorization": "Bearer " + API_KEY}
-        DEVICE_ID = entity._device_id
-        API_DEVICES = API_BASEURL + "/devices/"
-        API_DEVICE = API_DEVICES + DEVICE_ID
-        API_COMMAND = API_DEVICE + "/commands"
+class SmartThingsConnectionError(SmartThingsError):
+    """The API could not be reached or returned an unexpected response."""
 
-        if cmdtype == "setvolume":  # sets volume
-            API_COMMAND_DATA = "{'commands':[{'component': 'main','capability': 'audioVolume','command': 'setVolume','arguments': "
-            volume = int(argument * entity._max_volume)
-            API_COMMAND_ARG = "[{}]}}]}}".format(volume)
-            API_FULL = API_COMMAND_DATA + API_COMMAND_ARG
-            cmdurl = requests.post(API_COMMAND, data=API_FULL, headers=REQUEST_HEADERS)
-        elif cmdtype == "stepvolume":  # steps volume up or down
-            if argument == "up":
-                API_COMMAND_DATA = "{'commands':[{'component': 'main','capability': 'audioVolume','command': 'volumeUp'}]}"
-                cmdurl = requests.post(API_COMMAND, data=API_COMMAND_DATA, headers=REQUEST_HEADERS)
-            else:
-                API_COMMAND_DATA = "{'commands':[{'component': 'main','capability': 'audioVolume','command': 'volumeDown'}]}"
-                cmdurl = requests.post(API_COMMAND, data=API_COMMAND_DATA, headers=REQUEST_HEADERS)
-        elif cmdtype == "audiomute":  # mutes audio
-            if entity._muted == False:
-                cmdurl = requests.post(API_COMMAND, data=COMMAND_MUTE, headers=REQUEST_HEADERS)
-            else:
-                cmdurl = requests.post(API_COMMAND, data=COMMAND_UNMUTE, headers=REQUEST_HEADERS)
-        elif cmdtype == "switch_off":  # turns off
-            cmdurl = requests.post(API_COMMAND, data=COMMAND_POWER_OFF, headers=REQUEST_HEADERS)
-        elif cmdtype == "switch_on":  # turns on
-            cmdurl = requests.post(API_COMMAND, data=COMMAND_POWER_ON, headers=REQUEST_HEADERS)
-        elif cmdtype == "play":  # play
-            cmdurl = requests.post(API_COMMAND, data=COMMAND_PLAY, headers=REQUEST_HEADERS)
-        elif cmdtype == "pause":  # pause
-            cmdurl = requests.post(API_COMMAND, data=COMMAND_PAUSE, headers=REQUEST_HEADERS)
-        elif cmdtype == "selectsource":  # changes source
-            API_COMMAND_DATA = "{'commands':[{'component': 'main','capability': 'mediaInputSource','command': 'setInputSource', 'arguments': "
-            API_COMMAND_ARG = "['{}']}}]}}".format(argument)
-            API_FULL = API_COMMAND_DATA + API_COMMAND_ARG
-            cmdurl = requests.post(API_COMMAND, data=API_FULL, headers=REQUEST_HEADERS)
-        elif cmdtype == "selectsoundmode":
-            API_COMMAND_DATA = f"""{{
-                   "commands":[
-                      {{
-                         "component":"main",
-                         "capability":"execute",
-                         "command":"execute",
-                         "arguments":[
-                            "/sec/networkaudio/soundmode",
-                            {{
-                               "x.com.samsung.networkaudio.soundmode":"{argument}"
-                            }}
-                         ]
-                      }}
-                   ]
-                }}"""
-            cmdurl = requests.post(API_COMMAND, data=API_COMMAND_DATA, headers=REQUEST_HEADERS)
-        entity.schedule_update_ha_state()
 
-    @staticmethod
-    def extractor(json, path):
-        def extractor_arr(json_obj, path_array):
-            if path_array[0] not in json_obj:
-                return None
-            if len(path_array) > 1:
-                return extractor_arr(json_obj[path_array[0]], path_array[1:])
-            return json_obj[path_array[0]]
+@dataclass(slots=True)
+class SoundbarState:
+    """Snapshot of the soundbar state reported by SmartThings."""
+
+    switch: str | None = None
+    playback_status: str | None = None
+    source: str | None = None
+    source_list: list[str] = field(default_factory=list)
+    muted: bool = False
+    volume: int | None = None
+    track_description: str | None = None
+
+
+def _value(data: dict[str, Any], attribute: str) -> Any:
+    """Return main.<attribute>.value from a /states payload, or None."""
+    main = data.get("main")
+    if not isinstance(main, dict):
+        return None
+    attr = main.get(attribute)
+    if not isinstance(attr, dict):
+        return None
+    return attr.get("value")
+
+
+def _parse_sources(raw: Any) -> list[str]:
+    """Parse supportedInputSources, which arrives in several shapes."""
+    if isinstance(raw, str):
         try:
-            return extractor_arr(json, path.split("."))
-        except:
-            return None
+            raw = json.loads(raw)
+        except ValueError:
+            return []
+    if isinstance(raw, dict):
+        raw = raw.get("value")
+    if isinstance(raw, list):
+        return [str(item) for item in raw]
+    return []
+
+
+def parse_state(data: dict[str, Any]) -> SoundbarState:
+    """Build a SoundbarState from a /devices/{id}/states payload."""
+    volume_raw = _value(data, "volume")
+    try:
+        volume = int(volume_raw) if volume_raw is not None else None
+    except (TypeError, ValueError):
+        volume = None
+
+    return SoundbarState(
+        switch=_value(data, "switch"),
+        playback_status=_value(data, "playbackStatus"),
+        source=_value(data, "inputSource"),
+        source_list=_parse_sources(_value(data, "supportedInputSources")),
+        muted=_value(data, "mute") == "muted",
+        volume=volume,
+        track_description=_value(data, "trackDescription"),
+    )
+
+
+class SmartThingsSoundbarApi:
+    """Talk to one soundbar through the SmartThings cloud API."""
+
+    def __init__(
+        self,
+        session: aiohttp.ClientSession,
+        token_provider: TokenProvider,
+        device_id: str,
+    ) -> None:
+        """Initialise the client."""
+        self._session = session
+        self._token_provider = token_provider
+        self.device_id = device_id
+
+    @staticmethod
+    async def async_list_devices(
+        session: aiohttp.ClientSession, token_provider: TokenProvider
+    ) -> list[dict[str, Any]]:
+        """Return every device visible to the token, following pagination."""
+        devices: list[dict[str, Any]] = []
+        url: str | None = f"{API_BASE_URL}/devices"
+        while url:
+            page = await _request(session, await token_provider(), "GET", url)
+            devices.extend(page.get("items", []))
+            next_link = (page.get("_links") or {}).get("next")
+            url = next_link.get("href") if isinstance(next_link, dict) else None
+        return devices
+
+    async def async_get_device(self) -> dict[str, Any]:
+        """Return the device description (label, manufacturer, model)."""
+        return await _request(
+            self._session,
+            await self._token_provider(),
+            "GET",
+            f"{API_BASE_URL}/devices/{self.device_id}",
+        )
+
+    async def async_get_state(self) -> SoundbarState:
+        """Ask the device to refresh, then read its current state."""
+        try:
+            await self.async_command("refresh", "refresh")
+        except SmartThingsAuthError:
+            raise
+        except SmartThingsError as err:
+            # An offline device rejects the refresh; the read below still works.
+            _LOGGER.debug("Refresh command failed: %s", err)
+
+        data = await _request(
+            self._session,
+            await self._token_provider(),
+            "GET",
+            f"{API_BASE_URL}/devices/{self.device_id}/states",
+        )
+        return parse_state(data)
+
+    async def async_command(
+        self,
+        capability: str,
+        command: str,
+        arguments: list[Any] | None = None,
+    ) -> None:
+        """Send a single command to the main component."""
+        cmd: dict[str, Any] = {
+            "component": "main",
+            "capability": capability,
+            "command": command,
+        }
+        if arguments is not None:
+            cmd["arguments"] = arguments
+        await _request(
+            self._session,
+            await self._token_provider(),
+            "POST",
+            f"{API_BASE_URL}/devices/{self.device_id}/commands",
+            {"commands": [cmd]},
+        )
+
+
+async def _request(
+    session: aiohttp.ClientSession,
+    token: str,
+    method: str,
+    url: str,
+    payload: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Perform an API request and map failures onto our exceptions."""
+    headers = {"Authorization": f"Bearer {token}"}
+    try:
+        async with session.request(
+            method, url, headers=headers, json=payload, timeout=REQUEST_TIMEOUT
+        ) as resp:
+            if resp.status in (401, 403):
+                raise SmartThingsAuthError(f"HTTP {resp.status} from SmartThings")
+            if resp.status >= 400:
+                body = await resp.text()
+                raise SmartThingsConnectionError(
+                    f"HTTP {resp.status} from SmartThings: {body[:200]}"
+                )
+            body = await resp.text()
+    except (TimeoutError, aiohttp.ClientError) as err:
+        raise SmartThingsConnectionError(str(err)) from err
+    if not body:
+        return {}
+    try:
+        data = json.loads(body)
+    except ValueError as err:
+        raise SmartThingsConnectionError("SmartThings returned invalid JSON") from err
+    return data if isinstance(data, dict) else {}

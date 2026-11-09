@@ -1,0 +1,82 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to SmartThings",
+        "description": "Choose how to sign in. Using the login of Home Assistant's SmartThings integration means no token to create or renew.",
+        "menu_options": {
+          "smartthings": "Use my SmartThings integration login (recommended)",
+          "token": "Paste a personal access token"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate",
+        "description": "SmartThings rejected the saved login. Choose how to sign in again.",
+        "menu_options": {
+          "smartthings": "Use my SmartThings integration login (recommended)",
+          "token": "Paste a personal access token"
+        }
+      },
+      "reconfigure": {
+        "title": "Change login",
+        "description": "Choose how this soundbar signs in to SmartThings.",
+        "menu_options": {
+          "smartthings": "Use my SmartThings integration login (recommended)",
+          "token": "Paste a personal access token"
+        }
+      },
+      "smartthings": {
+        "title": "Use SmartThings integration login",
+        "description": "The soundbar will use the login of the official SmartThings integration, which renews itself. That integration must stay set up.",
+        "data": {
+          "smartthings_entry_id": "SmartThings account"
+        }
+      },
+      "token": {
+        "title": "Personal access token",
+        "description": "Create a token at {token_url} with the Devices scopes (list, see, control). New tokens may expire after 24 hours.",
+        "data": {
+          "api_key": "Personal access token"
+        }
+      },
+      "device": {
+        "title": "Choose your soundbar",
+        "description": "Pick the soundbar to add. You can also paste a device ID.",
+        "data": {
+          "device_id": "Device"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to SmartThings.",
+      "invalid_auth": "The token was rejected. Check it is correct, not expired, and has the Devices scopes.",
+      "no_devices": "No devices were found for this token.",
+      "unknown": "Unexpected error."
+    },
+    "abort": {
+      "already_configured": "This soundbar is already configured.",
+      "reauth_successful": "Re-authentication was successful.",
+      "reconfigure_successful": "The login was updated.",
+      "smartthings_not_loaded": "The SmartThings integration is not set up or not loaded."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Soundbar options",
+        "data": {
+          "max_volume": "Maximum volume"
+        },
+        "data_description": {
+          "max_volume": "Soundbar volume level that Home Assistant treats as 100%."
+        }
+      }
+    }
+  },
+  "issues": {
+    "yaml_missing_device_id": {
+      "title": "SmartThings Soundbar YAML is missing device_id",
+      "description": "Your `smartthings_soundbar` YAML entry has no `device_id`, so it could not be imported. Remove it from `configuration.yaml`, restart, and add the soundbar from Settings > Devices & services instead."
+    }
+  }
+}

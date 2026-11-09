@@ -35,34 +35,35 @@ Adds support for SmartThings enabled Soundbar
 - Show current source
 
 
-## Configuration options
+## Configuration
 
-| Key | Type | Required | Default | Description |
-| --- | --- | --- | --- | --- |
-| `name` | `string` | `False` | `SmartThings Soundbar` | Name of soundbar |
-| `api_key` | `string` | `True` | - | SmartThings API key (see: [here](https://github.com/PiotrMachowski/Home-Assistant-custom-components-SmartThings-Soundbar#getting-api-key-and-device-id)) |
-| `device_id` | `string` | `True` | - | SmartThings device id (see: [here](https://github.com/PiotrMachowski/Home-Assistant-custom-components-SmartThings-Soundbar#getting-api-key-and-device-id)) |
-| `max_volume` | `positive integer` | `False` | 100 | Volume level that will be used as a maximum level in Home Assistant |
+The integration is set up from the Home Assistant UI:
 
-## Example usage
+1. Go to **Settings > Devices & services > Add integration** and search for **SmartThings Soundbar**.
+2. Choose how to sign in:
+   - **Use my SmartThings integration login** (recommended, shown when Home Assistant's official [SmartThings integration](https://www.home-assistant.io/integrations/smartthings/) is set up). The soundbar borrows that integration's login, which renews itself, so there is no token to manage. The official integration must stay set up and loaded.
+   - **Paste a personal access token** (see [below](#getting-a-token)).
+3. Pick your soundbar from the list of devices on your account.
 
-```yaml
-media_player:
-  - platform: smartthings_soundbar
-    name: Soundbar
-    api_key: "YOUR API KEY"
-    device_id: "YOUR DEVICE ID"
-    max_volume: 30
-```
+To switch an existing soundbar between the two, open its entry and choose **Reconfigure**.
 
+Each soundbar is added as its own entry. To change the maximum volume, open the entry and click **Configure**.
 
-## Getting API key and device id
+| Option | Default | Description |
+| --- | --- | --- |
+| Maximum volume | 100 | Soundbar volume level that Home Assistant treats as 100% |
 
-Make sure your device is connected to your SmartThings account.
+If SmartThings rejects the token later (for example because it expired), Home Assistant shows a **Re-authenticate** prompt where you can paste a new one.
 
-Obtain an API key by following [these steps](https://www.home-assistant.io/integrations/smartthings/#personal-access-token-pat).
+### Migrating from YAML
 
-Once you're signed in on that page, go to https://api.smartthings.com/v1/devices to see a list of your devices and their device IDs.
+YAML configuration is deprecated. Existing `media_player: - platform: smartthings_soundbar` entries are imported automatically on startup, keeping their entity IDs, name and `max_volume`. After the import, a repair notice asks you to remove the YAML block from `configuration.yaml`.
+
+## Getting a token
+
+Make sure your device is connected to your SmartThings account, then create a personal access token at https://account.smartthings.com/tokens with the **Devices** scopes (list, see, control).
+
+> **Note:** SmartThings now limits new personal access tokens to 24 hours. Tokens created before 30 December 2024 keep their original lifetime. If your token expires, use the re-authenticate prompt to paste a new one.
 
 ## Installation
 
@@ -85,13 +86,7 @@ unzip smartthings_soundbar.zip
 rm smartthings_soundbar.zip
 ```
 
-### Known problems
-
-* If you have config validation issues after installing this component you have to follow these steps:
-  * Install custom component
-  * Restart Home Assistant
-  * Add configuration
-  * Restart Home Assistant again
+Restart Home Assistant after installing, then add the integration from the UI.
 
 ## Supported devices
 
