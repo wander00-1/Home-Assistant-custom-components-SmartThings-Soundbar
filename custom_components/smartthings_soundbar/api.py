@@ -41,6 +41,8 @@ class SoundbarState:
     muted: bool = False
     volume: int | None = None
     track_description: str | None = None
+    # Full /states payload, kept for the diagnostics download.
+    raw: dict[str, Any] = field(default_factory=dict, repr=False)
 
 
 def _value(data: dict[str, Any], attribute: str) -> Any:
@@ -84,6 +86,7 @@ def parse_state(data: dict[str, Any]) -> SoundbarState:
         muted=_value(data, "mute") == "muted",
         volume=volume,
         track_description=_value(data, "trackDescription"),
+        raw=data,
     )
 
 

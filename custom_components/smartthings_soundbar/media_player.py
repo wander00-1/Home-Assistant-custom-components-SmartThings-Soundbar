@@ -19,11 +19,9 @@ from homeassistant.core import DOMAIN as HOMEASSISTANT_DOMAIN, HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.exceptions import HomeAssistantError
 import homeassistant.helpers.config_validation as cv
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.issue_registry import IssueSeverity, async_create_issue
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .api import SmartThingsAuthError, SmartThingsError
 from .const import (
@@ -34,6 +32,7 @@ from .const import (
     DOMAIN,
 )
 from .coordinator import SoundbarConfigEntry, SoundbarCoordinator
+from .entity import SoundbarEntity
 
 PARALLEL_UPDATES = 1
 
@@ -116,12 +115,9 @@ async def async_setup_entry(
     async_add_entities([SmartThingsSoundbarMediaPlayer(entry.runtime_data)])
 
 
-class SmartThingsSoundbarMediaPlayer(
-    CoordinatorEntity[SoundbarCoordinator], MediaPlayerEntity
-):
+class SmartThingsSoundbarMediaPlayer(SoundbarEntity, MediaPlayerEntity):
     """A SmartThings-connected soundbar."""
 
-    _attr_has_entity_name = True
     _attr_name = None
     _attr_device_class = MediaPlayerDeviceClass.SPEAKER
     _attr_supported_features = SUPPORTED_FEATURES
@@ -129,21 +125,9 @@ class SmartThingsSoundbarMediaPlayer(
     def __init__(self, coordinator: SoundbarCoordinator) -> None:
         """Initialise the entity."""
         super().__init__(coordinator)
-        device_id = coordinator.api.device_id
         # Matches the unique_id used by the YAML platform, so imported
         # entities keep their entity_id and history.
-        self._attr_unique_id = f"SmartThings_Soundbar_{device_id}"
-
-        device = coordinator.device
-        ocf = device.get("ocf") or {}
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, device_id)},
-            name=coordinator.config_entry.title,
-            manufacturer=ocf.get("manufacturerName")
-            or device.get("manufacturerName"),
-            model=ocf.get("modelNumber") or device.get("deviceTypeName"),
-            sw_version=ocf.get("firmwareVersion"),
-        )
+        self._attr_unique_id = f"SmartThings_Soundbar_{coordinator.api.device_id}"
 
     @property
     def _max_volume(self) -> int:
@@ -152,11 +136,6 @@ class SmartThingsSoundbarMediaPlayer(
                 CONF_MAX_VOLUME, DEFAULT_MAX_VOLUME
             )
         )
-
-    @property
-    def available(self) -> bool:
-        """SmartThings omits the switch value when the device is unreachable."""
-        return super().available and self.coordinator.data.switch is not None
 
     @property
     def state(self) -> MediaPlayerState | None:

@@ -78,5 +78,21 @@
       "title": "SmartThings Soundbar YAML is missing device_id",
       "description": "Your `smartthings_soundbar` YAML entry has no `device_id`, so it could not be imported. Remove it from `configuration.yaml`, restart, and add the soundbar from Settings > Devices & services instead."
     }
+  },
+  "entity": {
+    "sensor": {
+      "input_source": {
+        "name": "Input source"
+      },
+      "playback_status": {
+        "name": "Playback status"
+      },
+      "volume": {
+        "name": "Volume level"
+      },
+      "now_playing": {
+        "name": "Now playing"
+      }
+    }
   }
 }

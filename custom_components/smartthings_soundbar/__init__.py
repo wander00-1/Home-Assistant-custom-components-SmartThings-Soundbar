@@ -10,7 +10,7 @@ from .api import SmartThingsSoundbarApi
 from .auth import token_provider_for
 from .coordinator import SoundbarConfigEntry, SoundbarCoordinator
 
-PLATFORMS: list[Platform] = [Platform.MEDIA_PLAYER]
+PLATFORMS: list[Platform] = [Platform.MEDIA_PLAYER, Platform.SENSOR]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: SoundbarConfigEntry) -> bool:

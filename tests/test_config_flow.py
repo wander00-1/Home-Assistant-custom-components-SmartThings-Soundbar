@@ -101,6 +101,7 @@ async def test_reauth_flow(hass: HomeAssistant, mock_api, config_entry) -> None:
     )
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "reauth_successful"
+    await hass.async_block_till_done()
     assert config_entry.data[CONF_API_KEY] == "token-2"
 
 
@@ -157,6 +158,7 @@ async def test_reconfigure_to_smartthings_login(
     )
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "reconfigure_successful"
+    await hass.async_block_till_done()
     assert config_entry.data == {
         CONF_DEVICE_ID: DEVICE_ID,
         CONF_SMARTTHINGS_ENTRY_ID: smartthings_entry.entry_id,
